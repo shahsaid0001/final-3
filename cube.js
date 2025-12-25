@@ -1,65 +1,100 @@
-const scene = new THREE.Scene();
+let scene = new THREE.Scene();
 
-const camera = new THREE.PerspectiveCamera(
+let camera = new THREE.PerspectiveCamera(
   60,
   window.innerWidth / window.innerHeight,
   0.1,
   1000
 );
-camera.position.set(4, 4, 6);
+camera.position.set(7, 6, 9);
 camera.lookAt(0, 0, 0);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+let renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
 document.body.appendChild(renderer.domElement);
 
-// Light
+// Свет
 scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-dirLight.position.set(5, 5, 5);
-scene.add(dirLight);
+const light = new THREE.DirectionalLight(0xffffff, 1);
+light.position.set(5, 8, 6);
+scene.add(light);
 
-// Cube data
-const cubeData = [
-  { title: "music", text: "Музыкальный контент" },
-  { title: "news", text: "Новостной контент" },
-  { title: "search", text: "Поисковые запросы" },
-  { title: "podcast", text: "Подкасты и аудио" },
-  { title: "analytics", text: "Аналитические данные" },
-  { title: "users", text: "Активность пользователей" }
-];
+// Данные
+let cubeData = {};
+fetch("data.json")
+  .then(r => r.json())
+  .then(data => {
+    cubeData = data;
+    initCube(Object.keys(data));
+  });
 
-const materials = cubeData.map(() =>
-  new THREE.MeshStandardMaterial({
-    color: 0x4f80ff,
-    transparent: true,
-    opacity: 0.85
-  })
-);
+function initCube(labels) {
+  const colors = [
+    0x4f80ff, 0x00c2ff, 0x7c5cff,
+    0xff8f4f, 0x4fff8f, 0xff4f7c
+  ];
 
-const geometry = new THREE.BoxGeometry(2, 2, 2);
-const cube = new THREE.Mesh(geometry, materials);
-scene.add(cube);
+  const materials = labels.map((_, i) =>
+    new THREE.MeshStandardMaterial({
+      color: colors[i % colors.length],
+      transparent: true,
+      opacity: 0.9
+    })
+  );
 
-// Interaction
-const raycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2();
+  const geometry = new THREE.BoxGeometry(3.2, 3.2, 3.2);
+  const cube = new THREE.Mesh(geometry, materials);
+  scene.add(cube);
 
-window.addEventListener("click", event => {
-  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+  let hovered = null;
 
-  raycaster.setFromCamera(mouse, camera);
-  const intersects = raycaster.intersectObject(cube);
+  window.addEventListener("mousemove", e => {
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
 
-  if (intersects.length > 0) {
-    const faceIndex = Math.floor(intersects[0].faceIndex / 2);
-    const data = cubeData[faceIndex];
-    showInfo(data.title, data.text);
+    raycaster.setFromCamera(mouse, camera);
+    const hits = raycaster.intersectObject(cube);
+
+    if (hits.length) {
+      const f = Math.floor(hits[0].faceIndex / 2);
+      if (hovered !== f) {
+        if (hovered !== null) cube.material[hovered].opacity = 0.9;
+        cube.material[f].opacity = 1;
+        hovered = f;
+      }
+    } else if (hovered !== null) {
+      cube.material[hovered].opacity = 0.9;
+      hovered = null;
+    }
+  });
+
+  window.addEventListener("click", e => {
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+    const hits = raycaster.intersectObject(cube);
+
+    if (hits.length) {
+      const f = Math.floor(hits[0].faceIndex / 2);
+      const key = labels[f];
+      showInfo(key, cubeData[key]);
+    }
+  });
+
+  function animate() {
+    requestAnimationFrame(animate);
+    cube.rotation.y += 0.006;
+    cube.rotation.x += 0.004;
+    renderer.render(scene, camera);
   }
-});
+  animate();
+}
 
+// UI
 function showInfo(title, text) {
   document.getElementById("title").innerText = title;
   document.getElementById("content").innerText = text;
@@ -69,14 +104,6 @@ function showInfo(title, text) {
 document.getElementById("close").onclick = () => {
   document.getElementById("info").style.display = "none";
 };
-
-function animate() {
-  requestAnimationFrame(animate);
-  cube.rotation.y += 0.005;
-  cube.rotation.x += 0.003;
-  renderer.render(scene, camera);
-}
-animate();
 
 window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
